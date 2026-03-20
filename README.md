@@ -524,8 +524,6 @@ agent-browser snapshot -i -c -d 5         # Combine options
 | `-d, --depth <n>`      | Limit tree depth                                                        |
 | `-s, --selector <sel>` | Scope to CSS selector                                                   |
 
-The `-C` flag is useful for modern web apps that use custom clickable elements (divs, spans) instead of standard buttons/links.
-
 ## Annotated Screenshots
 
 The `--annotate` flag overlays numbered labels on interactive elements in the screenshot. Each label `[N]` corresponds to ref `@eN`, so the same refs work for both visual and text-based workflows.
