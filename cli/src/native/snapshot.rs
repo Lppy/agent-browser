@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::VecDeque;
 
 use serde_json::Value;
 
@@ -65,6 +66,15 @@ const STRUCTURAL_ROLES: &[&str] = &[
     "RootWebArea",
 ];
 
+const INVISIBLE_CHARS: &[char] = &[
+    '\u{FEFF}', // BOM / Zero Width No-Break Space
+    '\u{200B}', // Zero Width Space
+    '\u{200C}', // Zero Width Non-Joiner
+    '\u{200D}', // Zero Width Joiner
+    '\u{2060}', // Word Joiner
+    '\u{00A0}', // Non-Breaking Space (&nbsp;)
+];
+
 #[derive(Default)]
 pub struct SnapshotOptions {
     pub selector: Option<String>,
@@ -90,6 +100,50 @@ struct TreeNode {
     ref_id: Option<String>,
     depth: usize,
     cursor_info: Option<CursorElementInfo>, // cursor-interactive information
+}
+
+impl TreeNode {
+    // Create an empty node
+    fn empty() -> Self {
+        Self {
+            role: String::new(),
+            name: String::new(),
+            level: None,
+            checked: None,
+            expanded: None,
+            selected: None,
+            disabled: None,
+            required: None,
+            value_text: None,
+            backend_node_id: None,
+            children: Vec::new(),
+            parent_idx: None,
+            has_ref: false,
+            ref_id: None,
+            depth: 0,
+            cursor_info: None,
+        }
+    }
+
+    // Clear node content
+    fn clear(&mut self) {
+        self.role = String::new();
+        self.name = String::new();
+        self.level = None;
+        self.checked = None;
+        self.expanded = None;
+        self.selected = None;
+        self.disabled = None;
+        self.required = None;
+        self.value_text = None;
+        self.backend_node_id = None;
+        self.children.clear();
+        self.parent_idx = None;
+        self.has_ref = false;
+        self.ref_id = None;
+        self.depth = 0;
+        self.cursor_info = None;
+    }
 }
 
 /// Information about a cursor-interactive element (elements with cursor:pointer, onclick, tabindex, etc.)
@@ -709,24 +763,7 @@ fn build_tree(nodes: &[AXNode]) -> (Vec<TreeNode>, Vec<usize>) {
             extract_properties(&node.properties);
 
         if (node.ignored.unwrap_or(false) && role != "RootWebArea") || role == "InlineTextBox" {
-            tree_nodes.push(TreeNode {
-                role: String::new(),
-                name: String::new(),
-                level: None,
-                checked: None,
-                expanded: None,
-                selected: None,
-                disabled: None,
-                required: None,
-                value_text: None,
-                backend_node_id: None,
-                children: Vec::new(),
-                parent_idx: None,
-                has_ref: false,
-                ref_id: None,
-                depth: 0,
-                cursor_info: None,
-            });
+            tree_nodes.push(TreeNode::empty());
             id_to_idx.insert(node.node_id.clone(), i);
             continue;
         }
@@ -764,11 +801,80 @@ fn build_tree(nodes: &[AXNode]) -> (Vec<TreeNode>, Vec<usize>) {
         }
     }
 
+    // Process StaticText aggregation and deduplication.
+    for i in 0..tree_nodes.len() {
+        if tree_nodes[i].role.is_empty() || tree_nodes[i].children.is_empty() {
+            continue;
+        }
+
+        let children_indices: Vec<usize> = tree_nodes[i].children.clone();
+
+        // Continuous StaticText nodes at the same level are an artifact of HTML structure rather than semantic meaning.
+        // They typically represent a single continuous piece of text on the page that was split due to inline elements, formatting tags, or other structural reasons.
+        // Thus, continuous StaticText children are aggregated into the first one.
+        let mut start = 0;
+        while start < children_indices.len() {
+            // Skip non-StaticText nodes
+            if tree_nodes[children_indices[start]].role != "StaticText" {
+                start += 1;
+                continue;
+            }
+
+            // Find the end of the current StaticText sequence
+            let mut end = start + 1;
+            while end < children_indices.len()
+                && tree_nodes[children_indices[end]].role == "StaticText"
+            {
+                end += 1;
+            }
+
+            // If we have a sequence of at least two StaticText
+            if end > start + 1 {
+                // Collect and aggregate all names from the sequence
+                let aggregated_name: String = (start..end)
+                    .map(|idx| tree_nodes[children_indices[idx]].name.clone())
+                    .collect();
+                // Always aggregate into the first node of the sequence
+                tree_nodes[children_indices[start]].name = aggregated_name;
+                // Clear the rest of the nodes in the sequence (from start+1 to end-1)
+                for j in (start + 1)..end {
+                    tree_nodes[children_indices[j]].clear();
+                }
+            }
+            start = end;
+        }
+    }
+
+    // Clear empty parent-child relationships
+    for i in 0..tree_nodes.len() {
+        if tree_nodes[i].role.is_empty() {
+            continue;
+        }
+        // Filter out empty children (those with empty role)
+        let mut children_indices_deque = VecDeque::from(tree_nodes[i].children.clone());
+        let mut children_indices_filtered: Vec<usize> = Vec::new();
+        while let Some(child_idx) = children_indices_deque.pop_front() {
+            if tree_nodes[child_idx].role.is_empty() {
+                let grand_children_indices: Vec<usize> = tree_nodes[child_idx].children.clone();
+                for &grand_child_idx in grand_children_indices.iter().rev() {
+                    children_indices_deque.push_front(grand_child_idx);
+                    tree_nodes[grand_child_idx].parent_idx = Some(i);
+                }
+            } else {
+                children_indices_filtered.push(child_idx);
+            }
+        }
+        tree_nodes[i].children = children_indices_filtered;
+    }
+
     // Set depths
     let mut root_indices = Vec::new();
     let children_exist: Vec<bool> = nodes.iter().map(|_| false).collect();
     let mut is_child = children_exist;
-    for node in &tree_nodes {
+    for (i, node) in tree_nodes.iter().enumerate() {
+        if node.role.is_empty() {
+            is_child[i] = true;
+        }
         for &child in &node.children {
             is_child[child] = true;
         }
@@ -803,7 +909,10 @@ fn render_tree(
 ) {
     let node = &nodes[idx];
 
-    if node.role.is_empty() {
+    if node.role.is_empty()
+        || (node.role == "generic" && !node.has_ref && node.children.len() <= 1)
+        || (node.role == "StaticText" && node.name.replace(&INVISIBLE_CHARS[..], "").is_empty())
+    {
         // Ignored node -- still render children
         for &child in &node.children {
             render_tree(nodes, child, indent, output, options);
