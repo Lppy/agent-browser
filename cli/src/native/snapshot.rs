@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::collections::VecDeque;
 
 use serde_json::Value;
 
@@ -858,36 +857,11 @@ fn build_tree(nodes: &[AXNode]) -> (Vec<TreeNode>, Vec<usize>) {
         }
     }
 
-    // Clear empty parent-child relationships
-    for i in 0..tree_nodes.len() {
-        if tree_nodes[i].role.is_empty() {
-            continue;
-        }
-        // Filter out empty children (those with empty role)
-        let mut children_indices_deque = VecDeque::from(tree_nodes[i].children.clone());
-        let mut children_indices_filtered: Vec<usize> = Vec::new();
-        while let Some(child_idx) = children_indices_deque.pop_front() {
-            if tree_nodes[child_idx].role.is_empty() {
-                let grand_children_indices: Vec<usize> = tree_nodes[child_idx].children.clone();
-                for &grand_child_idx in grand_children_indices.iter().rev() {
-                    children_indices_deque.push_front(grand_child_idx);
-                    tree_nodes[grand_child_idx].parent_idx = Some(i);
-                }
-            } else {
-                children_indices_filtered.push(child_idx);
-            }
-        }
-        tree_nodes[i].children = children_indices_filtered;
-    }
-
     // Set depths
     let mut root_indices = Vec::new();
     let children_exist: Vec<bool> = nodes.iter().map(|_| false).collect();
     let mut is_child = children_exist;
-    for (i, node) in tree_nodes.iter().enumerate() {
-        if node.role.is_empty() {
-            is_child[i] = true;
-        }
+    for node in &tree_nodes {
         for &child in &node.children {
             is_child[child] = true;
         }
@@ -962,7 +936,7 @@ fn render_tree(
     let mut line = format!("{}- {}", prefix, role);
 
     // Use ARIA name if available, only fall back to cursor-interactive textContent in interactive mode since their visible text in child nodes is filtered out
-    let display_name = if !node.name.is_empty() {
+    let unescaped_display_name = if !node.name.is_empty() {
         &node.name
     } else if options.interactive {
         if let Some(ref ci) = node.cursor_info {
@@ -973,8 +947,13 @@ fn render_tree(
     } else {
         &node.name
     };
-    if !display_name.is_empty() {
-        line.push_str(&format!(" \"{}\"", display_name));
+    if !unescaped_display_name.is_empty() {
+        if let Ok(display_name) = serde_json::to_string(&unescaped_display_name) {
+            line.push_str(&format!(
+                " {}",
+                display_name.replace(&INVISIBLE_CHARS[..], "")
+            ));
+        }
     }
 
     // Properties
