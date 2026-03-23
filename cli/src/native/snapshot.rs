@@ -855,6 +855,14 @@ fn build_tree(nodes: &[AXNode]) -> (Vec<TreeNode>, Vec<usize>) {
             }
             start = end;
         }
+
+        // Deduplicate redundant StaticText
+        if children_indices.len() == 1
+            && tree_nodes[children_indices[0]].role == "StaticText"
+            && tree_nodes[i].name == tree_nodes[children_indices[0]].name
+        {
+            tree_nodes[children_indices[0]].clear();
+        }
     }
 
     // Set depths
