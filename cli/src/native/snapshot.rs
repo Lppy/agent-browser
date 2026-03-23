@@ -949,10 +949,7 @@ fn render_tree(
     };
     if !unescaped_display_name.is_empty() {
         if let Ok(display_name) = serde_json::to_string(&unescaped_display_name) {
-            line.push_str(&format!(
-                " {}",
-                display_name.replace(INVISIBLE_CHARS, "")
-            ));
+            line.push_str(&format!(" {}", display_name.replace(INVISIBLE_CHARS, "")));
         }
     }
 
