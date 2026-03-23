@@ -899,7 +899,7 @@ fn render_tree(
     // Reduce unnecessary indentation and rendering
     if node.role.is_empty()
         || (node.role == "generic" && !node.has_ref && node.children.len() <= 1)
-        || (node.role == "StaticText" && node.name.replace(&INVISIBLE_CHARS[..], "").is_empty())
+        || (node.role == "StaticText" && node.name.replace(INVISIBLE_CHARS, "").is_empty())
     {
         // Ignored node -- still render children
         for &child in &node.children {
@@ -951,7 +951,7 @@ fn render_tree(
         if let Ok(display_name) = serde_json::to_string(&unescaped_display_name) {
             line.push_str(&format!(
                 " {}",
-                display_name.replace(&INVISIBLE_CHARS[..], "")
+                display_name.replace(INVISIBLE_CHARS, "")
             ));
         }
     }
