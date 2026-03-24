@@ -321,7 +321,6 @@ agent-browser frame main          # Return to main frame
 agent-browser open https://example.com/products
 agent-browser snapshot -i
 agent-browser get text @e5           # Get specific element text
-agent-browser get text body > page.txt  # Get all page text
 
 # JSON output for parsing
 agent-browser snapshot -i --json
