@@ -12,21 +12,26 @@ The CLI uses Chrome/Chromium via CDP directly. Install via `npm i -g agent-brows
 
 Every browser automation follows this pattern:
 
-1. **Navigate**: `agent-browser open <url>`
-2. **Snapshot**: `agent-browser snapshot -i` (get element refs like `@e1`, `@e2`)
-3. **Interact**: Use refs to click, fill, select
-4. **Re-snapshot**: After navigation or DOM changes, get fresh refs
+1. **Navigate**: 
+   - Headless mode: `agent-browser open <url>`
+   - Headed mode, show the browser window: `agent-browser --headed open <url>`
+2. **Snapshot**: 
+   - Recommended: `agent-browser snapshot` (get element refs like `e1`, `e2`)
+   - When snapshot is too large: `agent-browser snapshot | grep "text1\|text2"` (only get elements related with `text1` or `text2`)
+   - Snapshot can't obtain information: `agent-browser screenshot --annotate` (get annotated screenshot with numbered element labels like `1`, `2`)
+3. **Interact**: Use refs to click, fill, select (e.g., `@e1`, `@e2`)
+4. **Re-snapshot**: After navigation or DOM changes (e.g., after click), get fresh refs
 
 ```bash
 agent-browser open https://example.com/form
-agent-browser snapshot -i
-# Output: @e1 [input type="email"], @e2 [input type="password"], @e3 [button] "Submit"
+agent-browser snapshot
+# Output: e1 [input type="email"], e2 [input type="password"], e3 [button] "Submit"
 
 agent-browser fill @e1 "user@example.com"
 agent-browser fill @e2 "password123"
 agent-browser click @e3
 agent-browser wait --load networkidle
-agent-browser snapshot -i  # Check result
+agent-browser snapshot # Check result
 ```
 
 ## Command Chaining
@@ -35,13 +40,13 @@ Commands can be chained with `&&` in a single shell invocation. The browser pers
 
 ```bash
 # Chain open + wait + snapshot in one call
-agent-browser open https://example.com && agent-browser wait --load networkidle && agent-browser snapshot -i
+agent-browser open https://example.com && agent-browser wait --load networkidle && agent-browser snapshot
 
 # Chain multiple interactions
 agent-browser fill @e1 "user@example.com" && agent-browser fill @e2 "password123" && agent-browser click @e3
 
 # Navigate and capture
-agent-browser open https://example.com && agent-browser wait --load networkidle && agent-browser screenshot page.png
+agent-browser open https://example.com && agent-browser wait --load networkidle && agent-browser screenshot --annotate page.png
 ```
 
 **When to chain:** Use `&&` when you don't need to read the output of an intermediate command before proceeding (e.g., open + wait + screenshot). Run commands separately when you need to parse the output first (e.g., snapshot to discover refs, then interact using those refs).
@@ -112,8 +117,9 @@ agent-browser open <url>              # Navigate (aliases: goto, navigate)
 agent-browser close                   # Close browser
 
 # Snapshot
-agent-browser snapshot -i             # Interactive elements with refs (recommended)
-agent-browser snapshot -s "#selector" # Scope to CSS selector
+agent-browser snapshot                # All elements with refs (recommended)
+agent-browser snapshot -i             # Only interactive elements
+agent-browser snapshot | grep text    # Only elements related with `text`
 
 # Interaction (use @refs from snapshot)
 agent-browser click @e1               # Click element
@@ -276,6 +282,15 @@ agent-browser state clear myapp
 agent-browser state clean --older-than 7
 ```
 
+### Tabs Switch
+
+```bash
+agent-browser tab                     # List tabs
+agent-browser tab new [url]           # New tab (optionally with URL)
+agent-browser tab <n>                 # Switch to tab n
+agent-browser tab close [n]           # Close tab
+```
+
 ### Working with Iframes
 
 Iframe content is automatically inlined in snapshots. Refs inside iframes carry frame context, so you can interact with them directly.
@@ -296,7 +311,7 @@ agent-browser click @e5
 
 # To scope a snapshot to one iframe:
 agent-browser frame @e2
-agent-browser snapshot -i         # Only iframe content
+agent-browser snapshot            # Only iframe content
 agent-browser frame main          # Return to main frame
 ```
 
