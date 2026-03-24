@@ -20,7 +20,9 @@ Every browser automation follows this pattern:
    - When snapshot is too large: `agent-browser snapshot | grep "text1\|text2"` (only get elements related with `text1` or `text2`)
    - Snapshot can't obtain information: `agent-browser screenshot --annotate` (get annotated screenshot with numbered element labels like `1`, `2`)
 3. **Interact**: Use refs to click, fill, select (e.g., `@e1`, `@e2`)
-4. **Re-snapshot**: After navigation or DOM changes (e.g., after click), get fresh refs
+4. **Re-snapshot**: 
+   - Refs (`@e1`, `@e2`, etc.) are invalidated when the page changes. 
+   - Re-snapshot to get fresh refs after clicking links or buttons, form submissions, and dynamic content loading.
 
 ```bash
 agent-browser open https://example.com/form
