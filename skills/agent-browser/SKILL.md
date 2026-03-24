@@ -19,7 +19,9 @@ Every browser automation follows this pattern:
    - Recommended: `agent-browser snapshot` (get element refs like `e1`, `e2`)
    - When snapshot is too large: `agent-browser snapshot | grep "text1\|text2"` (only get elements related with `text1` or `text2`)
    - Snapshot can't obtain information: `agent-browser screenshot --annotate` (get annotated screenshot with numbered element labels like `1`, `2`)
-3. **Interact**: Use refs to click, fill, select (e.g., `@e1`, `@e2`)
+3. **Interact**: 
+   - Use refs to click, fill, select (e.g., `@e1`, `@e2`).
+   - Before interacting with refs, ensure that no other interactions have occurred since the last snapshot.
 4. **Re-snapshot**: 
    - Refs (`@e1`, `@e2`, etc.) are invalidated when the page changes. 
    - Re-snapshot to get fresh refs after clicking links or buttons, form submissions, and dynamic content loading.
